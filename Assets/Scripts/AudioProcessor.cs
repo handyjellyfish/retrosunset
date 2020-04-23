@@ -28,9 +28,9 @@ namespace HandyJellyfish.Audio
         [SerializeField] AudioSource audio;
 
         [SerializeField] SampleBandType sampleBandType;
-        [SerializeField] int sampleBands = 32;
         [SerializeField] int dynamicBand1Width = 1;
-
+        
+        public int SampleBands = 32;
         public SampleEvent OnSample = new SampleEvent();
         public BeatEvent OnBeat = new BeatEvent();
 
@@ -53,8 +53,8 @@ namespace HandyJellyfish.Audio
         {
             sampleTime = samples/(float)audio.clip.frequency;
             energySamples = new float[audio.clip.frequency/samples];
-            bandEnergySamples = new float[sampleBands * 2, audio.clip.frequency/samples];
-            bands = new float[sampleBands];
+            bandEnergySamples = new float[SampleBands * 2, audio.clip.frequency/samples];
+            bands = new float[SampleBands];
 
             samplesLeft = new float[samples];
             samplesRight = new float[samples];
@@ -184,7 +184,7 @@ namespace HandyJellyfish.Audio
 
             OnSample.Invoke(bands);
 
-            var debugOffset = sampleBands*0.1f;
+            var debugOffset = SampleBands*0.1f;
             
             for (var i = 0; i < bands.Length; i++)
             {

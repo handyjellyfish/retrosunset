@@ -10,7 +10,8 @@ namespace RetroSunset
     public class ReactiveMountains : MonoBehaviour
     {
         [SerializeField] AudioProcessor processor;
-        [SerializeField] int samples = 128;
+        [SerializeField] int sampleSize;
+
         [SerializeField] bool invert = false;
 
         [SerializeField] float speed;
@@ -43,7 +44,9 @@ namespace RetroSunset
 
         void InitializeGrids()
         {
-            gridSize = samples + 1;
+            processor.SampleBands = sampleSize;
+            gridSize = processor.SampleBands + 1;
+
             var mapSize = gridSize * gridSize;
             heightMap = new List<float>(mapSize);
 
@@ -51,10 +54,10 @@ namespace RetroSunset
                 heightMap.Add(0);
 
             foreach (var grid in rightGrids)
-                grid.SetHeightMap(heightMap, samples + 1, samples + 1);
+                grid.SetHeightMap(heightMap, gridSize, gridSize);
             
             foreach (var grid in leftGrids)
-                grid.SetHeightMap(heightMap, samples + 1, samples + 1);
+                grid.SetHeightMap(heightMap, gridSize, gridSize);
         }
 
         void MoveGrids(DynamicGrid[] grids, int direction)
@@ -84,12 +87,12 @@ namespace RetroSunset
 
         void GenerateRow(float[] sampleData)
         {
-            if (sampleData.Length < samples || rightGrids[0].Animating)
+            if (sampleData.Length < sampleSize || rightGrids[0].Animating)
                 return;
             
             float minValue = float.MaxValue;
 
-            for (int i = 0; i < samples; i++)
+            for (int i = 0; i < sampleSize; i++)
             {
                 if (sampleData[i] < minValue)
                     minValue = sampleData[i];
@@ -108,16 +111,16 @@ namespace RetroSunset
             heightMap.RemoveRange(ix, gridSize);
             
             // add the new row of data from the samples we received.
-            for (var i = 0; i < samples; i++)
+            for (var i = 0; i < sampleSize; i++)
             {
-                ix = invert ? samples - (i + 1) : i;
+                ix = invert ? sampleSize - (i + 1) : i;
                 // first row is 0 height to join to road math.Log(x + 1) => ensure no negative values
                 heightMap.Insert(gridSize + i, Mathf.Log(sampleData[ix] + 1) * 2);
             }
             
             // insert the first column in the last column to match the next grid
-            ix = invert ? samples - 1 : 0;
-            heightMap.Insert(gridSize + samples, Mathf.Log(sampleData[ix] + 1) * 2);
+            ix = invert ? sampleSize - 1 : 0;
+            heightMap.Insert(gridSize + sampleSize, Mathf.Log(sampleData[ix] + 1) * 2);
 
             // send height maps to the grids
             foreach(var grid in rightGrids)
