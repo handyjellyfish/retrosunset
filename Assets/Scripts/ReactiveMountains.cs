@@ -6,68 +6,125 @@ using UnityEngine;
 
 namespace RetroSunset
 {
+    [ExecuteAlways]
     public class ReactiveMountains : MonoBehaviour
     {
-        [SerializeField] AudioProcessor audio;
-        [SerializeField] DynamicGrid dynamicGrid;
-
+        [SerializeField] AudioProcessor processor;
         [SerializeField] int samples = 128;
-        [SerializeField] int channel = 0;
-
         [SerializeField] bool invert = false;
 
-        List<ushort> heightMap;
+        [SerializeField] float speed;
+        [SerializeField] float resetPoint;
+
+        [SerializeField] DynamicGrid[] rightGrids;
+        [SerializeField] DynamicGrid[] leftGrids;
+
+        List<float> heightMap;
+        int gridSize;
 
         void Start()
         {
-            heightMap = new List<ushort>(samples * samples);
-            for(var i = 0; i < samples * samples; i++)
+            InitializeGrids();
+            processor.OnSample.AddListener(GenerateRow);
+        }
+
+        void Update()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                InitializeGrids();
+                return;
+            }
+#endif
+            MoveGrids(leftGrids, -1);
+            MoveGrids(rightGrids, 1);
+        }
+
+        void InitializeGrids()
+        {
+            gridSize = samples + 1;
+            var mapSize = gridSize * gridSize;
+            heightMap = new List<float>(mapSize);
+
+            for (var i = 0; i < mapSize; i++)
                 heightMap.Add(0);
 
-            audio.OnSample.AddListener(GenerateRow);
-	}
+            foreach (var grid in rightGrids)
+                grid.SetHeightMap(heightMap, samples + 1, samples + 1);
+            
+            foreach (var grid in leftGrids)
+                grid.SetHeightMap(heightMap, samples + 1, samples + 1);
+        }
+
+        void MoveGrids(DynamicGrid[] grids, int direction)
+        {
+            var moveTowards = new Vector3(direction * (resetPoint + grids[0].Bounds.max.x), 0, 0);
+
+            var overshotIx = -1;
+
+            for (var i = 0; i < grids.Length; i++)
+            {
+                var grid = grids[i];
+                var step = speed * Time.deltaTime;
+                grid.transform.localPosition = Vector3.MoveTowards(grid.transform.localPosition, moveTowards, step);
+
+                if (Vector3.Distance(grid.transform.localPosition, moveTowards) < 0.001f)
+                    overshotIx = i;
+            }
+
+            if (overshotIx >= 0)
+            {
+                var lastGrid = grids[overshotIx > 0 ? overshotIx - 1 : grids.Length - 1];
+                var pos = lastGrid.transform.localPosition;
+
+                grids[overshotIx].transform.localPosition = new Vector3(pos.x - direction * lastGrid.Bounds.size.x, 0, 0);
+            }
+        }
 
         void GenerateRow(float[] sampleData)
         {
-            //while (true)
-            //{
-                //var sampleData = audio.bands; //new float[samples];
-                //audio.GetSpectrumData(sampleData, 0, FFTWindow.BlackmanHarris);
-
-                if (sampleData.Length == 0)
-                {
-                    return;
-                    //continue;
-                }
-                
-                float minValue = float.MaxValue;
-
-                for (int i = 0; i < sampleData.Length; i++)
-                {
-                    if (sampleData[i] < minValue)
-                        minValue = sampleData[i];
-                    
-                    if (i == 0 || i == sampleData.Length - 1)
-                        continue;
-
-                    Debug.DrawLine(new Vector3(i - 1, sampleData[i], 0), new Vector3(i, sampleData[i + 1], 0), Color.red);
-                    Debug.DrawLine(new Vector3(i - 1, Mathf.Log(sampleData[i - 1]) + 10, 2), new Vector3(i, Mathf.Log(sampleData[i]) + 10, 2), Color.cyan);
-                    Debug.DrawLine(new Vector3(Mathf.Log(i - 1), sampleData[i - 1] - 10, 1), new Vector3(Mathf.Log(i), sampleData[i] - 10, 1), Color.green);
-                    Debug.DrawLine(new Vector3(Mathf.Log(i - 1), Mathf.Log(sampleData[i - 1]), 3), new Vector3(Mathf.Log(i), Mathf.Log(sampleData[i]), 3), Color.blue);
-                }
+            if (sampleData.Length < samples || rightGrids[0].Animating)
+                return;
             
+            float minValue = float.MaxValue;
 
-                heightMap.RemoveAt(sampleData.Length*sampleData.Length - sampleData.Length);
-                for (var i = 0; i < sampleData.Length; i++)
-                {
-                    var ix = invert ? sampleData.Length - (i + 1) : i;
-                    var height = Mathf.FloatToHalf(sampleData[ix]) - Mathf.FloatToHalf(minValue);
-                    heightMap.Insert(0, (ushort)height);
-                }
+            for (int i = 0; i < samples; i++)
+            {
+                if (sampleData[i] < minValue)
+                    minValue = sampleData[i];
+                
+                // if (i == 0 || i == samples - 1)
+                //     continue;
 
-                dynamicGrid.SetHeightMap(sampleData.Length, sampleData.Length, heightMap.ToArray(), 1250);
-                //yield return null; // new WaitForSeconds(60/bpm);
-            //}
+                // Debug.DrawLine(new Vector3(i - 1, sampleData[i], 0), new Vector3(i, sampleData[i + 1], 0), Color.red);
+                // Debug.DrawLine(new Vector3(i - 1, Mathf.Log(sampleData[i - 1]) + 10, 2), new Vector3(i, Mathf.Log(sampleData[i]) + 10, 2), Color.cyan);
+                // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), sampleData[i - 1] - 10, 1), new Vector3(Mathf.Log(i), sampleData[i] - 10, 1), Color.green);
+                // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), Mathf.Log(sampleData[i - 1]), 3), new Vector3(Mathf.Log(i), Mathf.Log(sampleData[i]), 3), Color.blue);
+            }
+        
+            // remove the last row of data
+            var ix = heightMap.Count - 1 - gridSize;
+            heightMap.RemoveRange(ix, gridSize);
+            
+            // add the new row of data from the samples we received.
+            for (var i = 0; i < samples; i++)
+            {
+                ix = invert ? samples - (i + 1) : i;
+                // first row is 0 height to join to road math.Log(x + 1) => ensure no negative values
+                heightMap.Insert(gridSize + i, Mathf.Log(sampleData[ix] + 1) * 2);
+            }
+            
+            // insert the first column in the last column to match the next grid
+            ix = invert ? samples - 1 : 0;
+            heightMap.Insert(gridSize + samples, Mathf.Log(sampleData[ix] + 1) * 2);
+
+            // send height maps to the grids
+            foreach(var grid in rightGrids)
+                grid.SetHeightMap(heightMap);
+
+            foreach(var grid in leftGrids)
+                grid.SetHeightMap(heightMap);
         }
     }
 }
