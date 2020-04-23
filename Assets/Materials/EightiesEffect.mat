@@ -57,8 +57,8 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Floats:
     - _Aberration: 0.002
-    - _AberrationX: 0.0008336026
-    - _AberrationY: 0.0013286686
+    - _AberrationX: 0.001
+    - _AberrationY: 0.0015
     - _Amount: 0.0025
     - _BumpScale: 1
     - _Cutoff: 0.5
