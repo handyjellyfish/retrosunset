@@ -12,13 +12,13 @@ namespace RetroSunset
     {
         [SerializeField]float sizeX;
         [SerializeField]float sizeY;
-        [SerializeField][Range(0,1)]float heightScale;
-
+        
         [SerializeField]int pointsX;
         [SerializeField]int pointsY;
 
         [SerializeField]bool use32bitMesh;
-        [SerializeField][Range(0,2)]float animationTime;
+        
+        [Range(0,2)]public float animationTime;
 
         Coroutine heightAnimation;
         
@@ -31,17 +31,13 @@ namespace RetroSunset
         bool invalid = false;
         
         public Bounds Bounds => mesh.bounds;
-        public bool Animating => heightAnimation != null;
-
+        
         public void SetHeightMap(IList<float> map, int? width = null, int? height = null, bool sizeToPoints = true)
         {
-            if (Animating)
-                return;
-
             if (width != null && height != null)
             {
-                pointsY = width.Value; // + border * 2;
-                pointsX = height.Value; // + border * 2;
+                pointsY = width.Value;
+                pointsX = height.Value;
 
                 if (sizeToPoints)
                 {
@@ -51,9 +47,16 @@ namespace RetroSunset
             }
             
             if (animationTime > 0)
+            {
+                if (heightAnimation != null)
+                    StopCoroutine(heightAnimation);
+
                 heightAnimation = StartCoroutine(AnimateHeights(map));
+            }
             else
+            {
                 UpdateMesh(map);
+            }
         }
 
         void Start()
@@ -219,7 +222,7 @@ namespace RetroSunset
             for (var i = 0; i < heightMap.Count; i++)
             {
                 var oldheight = heightMap.Count == vertices.Length ? vertices[i].y : 0;
-                curve[i] = AnimationCurve.EaseInOut(0f, oldheight, animationTime, heightMap[i]);
+                curve[i] = AnimationCurve.Linear(0f, oldheight, animationTime, heightMap[i]);
             }
 
             while (time < animationTime)

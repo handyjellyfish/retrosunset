@@ -11,6 +11,7 @@ namespace RetroSunset
     {
         [SerializeField] AudioProcessor processor;
         [SerializeField] int sampleSize;
+        [SerializeField] int animateEvery;
 
         [SerializeField] bool invert = false;
 
@@ -22,11 +23,13 @@ namespace RetroSunset
 
         List<float> heightMap;
         int gridSize;
+        int samplesPassed;
 
         void Start()
         {
             InitializeGrids();
-            processor.OnSample.AddListener(GenerateRow);
+            processor.OnSample.AddListener(SamplesReceived);
+            samplesPassed = animateEvery; // ensure we set heights on our first sample received
         }
 
         void Update()
@@ -45,6 +48,8 @@ namespace RetroSunset
         void InitializeGrids()
         {
             processor.SampleBands = sampleSize;
+            
+            var animationTime = processor.SampleTime * animateEvery;
             gridSize = processor.SampleBands + 1;
 
             var mapSize = gridSize * gridSize;
@@ -54,10 +59,16 @@ namespace RetroSunset
                 heightMap.Add(0);
 
             foreach (var grid in rightGrids)
+            {
+                grid.animationTime = animationTime;
                 grid.SetHeightMap(heightMap, gridSize, gridSize);
+            }
             
             foreach (var grid in leftGrids)
+            {
+                grid.animationTime = animationTime;
                 grid.SetHeightMap(heightMap, gridSize, gridSize);
+            }
         }
 
         void MoveGrids(DynamicGrid[] grids, int direction)
@@ -85,9 +96,11 @@ namespace RetroSunset
             }
         }
 
-        void GenerateRow(float[] sampleData)
+        void SamplesReceived(float[] sampleData)
         {
-            if (sampleData.Length < sampleSize || rightGrids[0].Animating)
+            samplesPassed += 1;
+
+            if (sampleData.Length < sampleSize || samplesPassed <= animateEvery)
                 return;
             
             float minValue = float.MaxValue;
@@ -128,6 +141,8 @@ namespace RetroSunset
 
             foreach(var grid in leftGrids)
                 grid.SetHeightMap(heightMap);
+
+            samplesPassed = 0;
         }
     }
 }

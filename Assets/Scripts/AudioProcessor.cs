@@ -39,7 +39,7 @@ namespace HandyJellyfish.Audio
         const int samples = 1024;
         FFT fft = new FFT(samples);
 
-        float sampleTime;
+        public float SampleTime { get; private set; }
 
         float[] energySamples;
         float[,] bandEnergySamples;
@@ -51,7 +51,7 @@ namespace HandyJellyfish.Audio
 
         void Start()
         {
-            sampleTime = samples/(float)audio.clip.frequency;
+            SampleTime = samples/(float)audio.clip.frequency;
             energySamples = new float[audio.clip.frequency/samples];
             bandEnergySamples = new float[SampleBands * 2, audio.clip.frequency/samples];
             bands = new float[SampleBands];
@@ -74,7 +74,7 @@ namespace HandyJellyfish.Audio
                 else
                     FrequencyBeatDetection();
                 
-                yield return new WaitForSeconds(sampleTime);
+                yield return new WaitForSeconds(SampleTime);
             }
         }
 
@@ -197,8 +197,8 @@ namespace HandyJellyfish.Audio
                 if (debug)
                 {
                     var lineOffset = i * 0.2f - debugOffset;
-                    Debug.DrawLine(new Vector3(lineOffset, 5, 0), new Vector3(lineOffset, bands[i] + 5, 0), Color.red, sampleTime);
-                    Debug.DrawLine(new Vector3(lineOffset - (i == 0 ? 0 : 0.2f), averageEnergy + 5, 0), new Vector3(lineOffset, averageEnergy + 5, 0), Color.green, sampleTime);
+                    Debug.DrawLine(new Vector3(lineOffset, 5, 0), new Vector3(lineOffset, bands[i] + 5, 0), Color.red, SampleTime);
+                    Debug.DrawLine(new Vector3(lineOffset - (i == 0 ? 0 : 0.2f), averageEnergy + 5, 0), new Vector3(lineOffset, averageEnergy + 5, 0), Color.green, SampleTime);
                 }
 
                 if (bands[i] > averageEnergy * 1.4)

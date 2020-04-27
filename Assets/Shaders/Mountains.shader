@@ -1,24 +1,29 @@
-﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
-
-Shader "Custom/FlatShader"
+﻿Shader "Custom/Mountains"
 {
     Properties
     {
         // _MainTex ("Texture", 2D) = "white" {}
         _Albedo ("Albedo", Color) = (1, 1, 1)
+        _CubeMap ("Cubemap", Cube) = "" {}
+        _ReflectionPower ("ReflectionPower", Range(0,10)) = 1
         _WireframeColor1 ("Wireframe Colour 1", Color) = (0, 0, 0)
         _WireframeColor2 ("Wireframe Colour 2", Color) = (0, 0, 0)
         
         _WireframeSmoothing ("Wireframe Smoothing", Range(0, 10)) = 1
-		_WireframeThickness ("Wireframe Thickness", Range(0, 10)) = 1
+        _WireframeThickness ("Wireframe Thickness", Range(0, 10)) = 1
     }
+    
     SubShader
     {
         // No culling or depth
         // Cull Off ZWrite Off ZTest Always
-
+        Tags {"Queue"="Transparent" }
+        
         Pass
         {
+            Blend SrcAlpha OneMinusSrcAlpha // standard alpha blending
+            ZWrite On
+
             CGPROGRAM
             #pragma target 4.0
 
@@ -37,6 +42,7 @@ Shader "Custom/FlatShader"
             {
                 float4 vertex : SV_POSITION;
                 float3 worldPos : TEXCOORD0;
+                float3 viewDir : TEXCOORD1;
             };
 
             struct g2f 
@@ -44,21 +50,28 @@ Shader "Custom/FlatShader"
                 float4 vertex : SV_POSITION;
                 float3 normal : NORMAL;
                 fixed3 col : COLOR;
-                fixed3 baryCoords : TEXCOORD0;
+                fixed3 worldPos : TEXCOORD0;
+                float3 viewDir : TEXCOORD1;
+                float3 baryCoords : TEXCOORD2;
             };
 
-            fixed3 _Albedo;
+            samplerCUBE _CubeMap;
 
+            fixed4 _Albedo;
+            
             fixed3 _WireframeColor1;
             fixed3 _WireframeColor2;
             fixed _WireframeSmoothing;
             fixed _WireframeThickness;
+
+            fixed _ReflectionPower;
 
             v2g vert (appdata v)
             {
                 v2g o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul (unity_ObjectToWorld, v.vertex).xyz;
+                o.viewDir = normalize(_WorldSpaceCameraPos - mul(unity_ObjectToWorld, v.vertex).xyz);
                 return o;
             }
 
@@ -74,10 +87,19 @@ Shader "Custom/FlatShader"
                 float3 v2 = p2 - p0;
 
                 g2f f0, f1, f2;
+
                 f0.vertex = i[0].vertex;
                 f1.vertex = i[1].vertex;
                 f2.vertex = i[2].vertex;
 
+                f0.worldPos = i[0].worldPos;
+                f1.worldPos = i[1].worldPos;
+                f2.worldPos = i[2].worldPos;
+
+                f0.viewDir = i[0].viewDir;
+                f1.viewDir = i[1].viewDir;
+                f2.viewDir = i[2].viewDir;
+                
 //------------------------------------------------------------------------------------------------------
 // gradient colour based on y position
 
@@ -114,10 +136,15 @@ Shader "Custom/FlatShader"
                 stream.Append(f2);
             }
 
-            fixed3 frag (g2f i) : SV_Target
+            fixed4 frag (g2f i) : SV_Target
             {
-                fixed3 col = _Albedo * max(i.normal.x, max(i.normal.y, i.normal.z));
+                fixed3 col = _Albedo.xyz * (1 - max(i.normal.x, max(i.normal.y, i.normal.z)) * 0.5f);//
                 
+                fixed rim = (1.0 - saturate(dot(i.viewDir, i.normal))) * _ReflectionPower;
+                fixed3 reflection = texCUBE(_CubeMap, i.worldPos).rgb * rim;
+                
+                col = saturate(col + reflection);
+
                 float3 deltas = fwidth(i.baryCoords);
                 
                 fixed3 thickness = deltas * _WireframeThickness;
@@ -126,7 +153,11 @@ Shader "Custom/FlatShader"
                 fixed3 barys = smoothstep(thickness, thickness + smoothing, i.baryCoords);
                 fixed minBary = min(barys.x, min(barys.y, barys.z));
                 
-                return lerp(i.col, col, minBary);
+                fixed4 fullCol;
+                fullCol.rgb = lerp(i.col, col, minBary);
+                fullCol.a = _Albedo.a;
+
+                return fullCol;
             }
 
             ENDCG
