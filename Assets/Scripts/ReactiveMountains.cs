@@ -11,7 +11,9 @@ namespace RetroSunset
     {
         [SerializeField] AudioProcessor processor;
         [SerializeField] int sampleSize;
+
         [SerializeField] int animateEvery;
+        [SerializeField] AnimationCurve animationCurve;
 
         [SerializeField] bool invert = false;
 
@@ -21,15 +23,15 @@ namespace RetroSunset
         [SerializeField] DynamicGrid[] rightGrids;
         [SerializeField] DynamicGrid[] leftGrids;
 
-        List<float> heightMap;
-        int gridSize;
-        int samplesPassed;
+        float[] heightMap;
+        Coroutine heightAnimation;
 
+        int gridSize;
+        
         void Start()
         {
             InitializeGrids();
             processor.OnSample.AddListener(SamplesReceived);
-            samplesPassed = animateEvery; // ensure we set heights on our first sample received
         }
 
         void Update()
@@ -48,27 +50,15 @@ namespace RetroSunset
         void InitializeGrids()
         {
             processor.SampleBands = sampleSize;
-            
-            var animationTime = processor.SampleTime * animateEvery;
-            gridSize = processor.SampleBands + 1;
+            gridSize = sampleSize + 1;
 
             var mapSize = gridSize * gridSize;
-            heightMap = new List<float>(mapSize);
+            heightMap = new float[mapSize];
 
             for (var i = 0; i < mapSize; i++)
-                heightMap.Add(0);
+                heightMap[i] = 0;
 
-            foreach (var grid in rightGrids)
-            {
-                grid.animationTime = animationTime;
-                grid.SetHeightMap(heightMap, gridSize, gridSize);
-            }
-            
-            foreach (var grid in leftGrids)
-            {
-                grid.animationTime = animationTime;
-                grid.SetHeightMap(heightMap, gridSize, gridSize);
-            }
+            SetHeightMap(heightMap, gridSize);
         }
 
         void MoveGrids(DynamicGrid[] grids, int direction)
@@ -98,9 +88,7 @@ namespace RetroSunset
 
         void SamplesReceived(float[] sampleData)
         {
-            samplesPassed += 1;
-
-            if (sampleData.Length < sampleSize || samplesPassed <= animateEvery)
+            if (sampleData.Length < sampleSize || heightAnimation != null)
                 return;
             
             float minValue = float.MaxValue;
@@ -119,30 +107,62 @@ namespace RetroSunset
                 // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), Mathf.Log(sampleData[i - 1]), 3), new Vector3(Mathf.Log(i), Mathf.Log(sampleData[i]), 3), Color.blue);
             }
         
-            // remove the last row of data
-            var ix = heightMap.Count - 1 - gridSize;
-            heightMap.RemoveRange(ix, gridSize);
+
+            var animationTime = processor.SampleTime * animateEvery;
             
-            // add the new row of data from the samples we received.
-            for (var i = 0; i < sampleSize; i++)
+            var newHeights = new float[heightMap.Length];
+            
+            // Copy all data, removing last row
+            for (var i = 0; i < newHeights.Length; i++)
             {
-                ix = invert ? sampleSize - (i + 1) : i;
-                // first row is 0 height to join to road math.Log(x + 1) => ensure no negative values
-                heightMap.Insert(gridSize + i, Mathf.Log(sampleData[ix] + 1) * 2);
+                var row = i / gridSize;
+
+                if (row == 0) {
+                    newHeights[i] = 0; // first row is 0 height to join the grid to the road
+                }
+                else if (row == 1) {
+                    var ix = i - gridSize == sampleSize ? 0 : i - gridSize; // last column joins to next grid
+                    ix = invert ? sampleSize - 1 - ix : ix;
+                    
+                    newHeights[i] = Mathf.Log(sampleData[ix] + 1) * 2; // log(x+1) ensures no negative values
+                }
+                else {
+                    newHeights[i] = heightMap[i-gridSize];
+                }
             }
             
-            // insert the first column in the last column to match the next grid
-            ix = invert ? sampleSize - 1 : 0;
-            heightMap.Insert(gridSize + sampleSize, Mathf.Log(sampleData[ix] + 1) * 2);
+            heightAnimation = StartCoroutine(AnimateHeights(newHeights, animationTime));
+        }
 
-            // send height maps to the grids
-            foreach(var grid in rightGrids)
-                grid.SetHeightMap(heightMap);
+        IEnumerator AnimateHeights(float[] newHeights, float animationTime)
+        {
+            var time = 0f;
+            var heights = new float[newHeights.Length];
 
-            foreach(var grid in leftGrids)
-                grid.SetHeightMap(heightMap);
+            while (time < animationTime)
+            {
+                for (var i = 0; i < heightMap.Length; i++)
+                {
+                    heights[i] = heightMap[i] + (animationCurve.Evaluate(time/animationTime) * (newHeights[i] - heightMap[i])); 
+                }
 
-            samplesPassed = 0;
+                SetHeightMap(heights);
+                yield return null;
+                time += Time.deltaTime;
+            }
+
+            SetHeightMap(newHeights);
+            heightMap = newHeights;
+            heightAnimation = null;
+        }
+
+        void SetHeightMap(float[] heightMap, int? gridSize = null)
+        {
+            foreach(var lGrid in leftGrids)
+                    lGrid.SetHeightMap(heightMap, gridSize, gridSize);
+
+            foreach(var rGrid in rightGrids)
+                rGrid.SetHeightMap(heightMap, gridSize, gridSize);
         }
     }
 }

@@ -6,7 +6,8 @@ namespace RetroSunset.ImageEffects
     [ExecuteInEditMode]
     public class EightiesEffect : MonoBehaviour
     {
-        [SerializeField] Material material;
+        [SerializeField] Material sharedMaterial;
+        Material material;
 
         [Range(-0.05f, 0.05f)]
         [SerializeField] float aberrationX = 0;
@@ -22,6 +23,7 @@ namespace RetroSunset.ImageEffects
         void Start()
         {
             aberration = new Vector2(aberrationX, aberrationY);
+            material = new Material(sharedMaterial);
         }
 
         void Update()
