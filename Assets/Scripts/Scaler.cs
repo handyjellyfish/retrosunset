@@ -5,40 +5,28 @@ using UnityEngine;
 
 namespace RetroSunset
 {
-    public class Scaler : MonoBehaviour
+    public class Scaler : BeatReactor
     {
-        [SerializeField]AudioProcessor processor;
-        [SerializeField]int band;
-        
-        [Range(0, 10)]
-        [SerializeField]float minIntensity = 0;
-        
-        [Range(1, 10)]
-        [SerializeField]float beatImpact = 1.1f;
-
-        [SerializeField]bool x = true;
-        [SerializeField]bool y = true;
-        [SerializeField]bool z = true;
+        [SerializeField]Vector3 beatScale = Vector3.one;
         
         Vector3 baseScale;
-        Vector3 beatScale;
+        Vector3 scale;
         
-        void Start()
+        protected override void Start()
         {
-            processor.OnBeat.AddListener(Scale);
             baseScale = transform.localScale;
+            base.Start();
         }
 
         void Update()
         {
-            transform.localScale = baseScale + beatScale;
+            // TODO: Bring in an animation to scale back the beat on reaction - steal from mountains code
+            transform.localScale = baseScale + scale;
         }
-        void Scale(int[] beats, float[] sample)
+
+        protected override void ProcessBeat(float beatIntensity)
         {
-            if (beats.Contains(band) && sample[band] > minIntensity)
-                beatScale = new Vector3(sample[band]*(x ? 1 : 0), sample[band]*(y ? 1 : 0), sample[band]*(z ? 1 : 0)) * beatImpact;
-            else
-                beatScale = Vector3.zero;
+            scale = beatScale * beatIntensity;
         }
     }
 }

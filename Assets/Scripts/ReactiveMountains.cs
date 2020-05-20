@@ -15,6 +15,7 @@ namespace RetroSunset
         [SerializeField] int animateEvery;
         [SerializeField] AnimationCurve animationCurve;
 
+        [SerializeField] [Range(0,10)] float heightMultiplier = 1f;
         [SerializeField] bool invert = false;
 
         [SerializeField] float speed;
@@ -49,7 +50,7 @@ namespace RetroSunset
 
         void InitializeGrids()
         {
-            processor.SampleBands = sampleSize;
+            // processor.OutputBands = sampleSize;
             gridSize = sampleSize + 1;
 
             var mapSize = gridSize * gridSize;
@@ -88,49 +89,56 @@ namespace RetroSunset
 
         void SamplesReceived(float[] sampleData)
         {
-            if (sampleData.Length < sampleSize || heightAnimation != null)
+            if (sampleSize == 0 || sampleData.Length % sampleSize > 0 || heightAnimation != null)
                 return;
             
-            float minValue = float.MaxValue;
+            var groupSize = sampleData.Length / sampleSize;
+            var heightFactor = heightMultiplier / groupSize;
 
-            for (int i = 0; i < sampleSize; i++)
-            {
-                if (sampleData[i] < minValue)
-                    minValue = sampleData[i];
+            // float minValue = float.MaxValue;
+
+            // for (int i = 0; i < sampleSize; i++)
+            // {
+            //     if (sampleData[i] < minValue)
+            //         minValue = sampleData[i];
                 
-                // if (i == 0 || i == samples - 1)
-                //     continue;
+            //     // if (i == 0 || i == samples - 1)
+            //     //     continue;
 
-                // Debug.DrawLine(new Vector3(i - 1, sampleData[i], 0), new Vector3(i, sampleData[i + 1], 0), Color.red);
-                // Debug.DrawLine(new Vector3(i - 1, Mathf.Log(sampleData[i - 1]) + 10, 2), new Vector3(i, Mathf.Log(sampleData[i]) + 10, 2), Color.cyan);
-                // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), sampleData[i - 1] - 10, 1), new Vector3(Mathf.Log(i), sampleData[i] - 10, 1), Color.green);
-                // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), Mathf.Log(sampleData[i - 1]), 3), new Vector3(Mathf.Log(i), Mathf.Log(sampleData[i]), 3), Color.blue);
-            }
-        
+            //     // Debug.DrawLine(new Vector3(i - 1, sampleData[i], 0), new Vector3(i, sampleData[i + 1], 0), Color.red);
+            //     // Debug.DrawLine(new Vector3(i - 1, Mathf.Log(sampleData[i - 1]) + 10, 2), new Vector3(i, Mathf.Log(sampleData[i]) + 10, 2), Color.cyan);
+            //     // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), sampleData[i - 1] - 10, 1), new Vector3(Mathf.Log(i), sampleData[i] - 10, 1), Color.green);
+            //     // Debug.DrawLine(new Vector3(Mathf.Log(i - 1), Mathf.Log(sampleData[i - 1]), 3), new Vector3(Mathf.Log(i), Mathf.Log(sampleData[i]), 3), Color.blue);
+            // }
 
-            var animationTime = processor.SampleTime * animateEvery;
-            
+            var animationTime = processor.SampleRatio * animateEvery;
             var newHeights = new float[heightMap.Length];
             
-            // Copy all data, removing last row
-            for (var i = 0; i < newHeights.Length; i++)
-            {
-                var row = i / gridSize;
+            // for (var i = 0; i < gridSize; i++)
+            //     newHeights[i] = 0; // first row is 0 height to join the grid to the road
+            int ix, heightIx;
 
-                if (row == 0) {
-                    newHeights[i] = 0; // first row is 0 height to join the grid to the road
-                }
-                else if (row == 1) {
-                    var ix = i - gridSize == sampleSize ? 0 : i - gridSize; // last column joins to next grid
-                    ix = invert ? sampleSize - 1 - ix : ix;
-                    
-                    newHeights[i] = Mathf.Log(sampleData[ix] + 1) * 2; // log(x+1) ensures no negative values
-                }
-                else {
-                    newHeights[i] = heightMap[i-gridSize];
-                }
+            // copy sample data to the height map grouping if sampleData > sampleSize
+            for (var i = 0; i < sampleData.Length; i++)
+            {
+                heightIx = gridSize + (i / groupSize); // first row is 0 height to join the grid to the road
+                 
+                ix = invert ? sampleData.Length - i : i;
+                newHeights[heightIx] += Mathf.Log(sampleData[ix] + 1) * heightFactor; // log(x+1) ensures no negative values
             }
+
+            // create the join between grids
+            for (var i = 0; i < groupSize; i++) 
+            {
+                ix = invert ? sampleData.Length - 1 - i : i;
+                newHeights[gridSize + gridSize - 1] += Mathf.Log(sampleData[ix] + 1) * heightFactor;
+            }
+
+            // copy the rest of the data over
+            for (var i = gridSize*2; i < newHeights.Length; i++)
+                newHeights[i] = heightMap[i-gridSize];
             
+            // animate
             heightAnimation = StartCoroutine(AnimateHeights(newHeights, animationTime));
         }
 
