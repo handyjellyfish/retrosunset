@@ -36,6 +36,7 @@ namespace HandyJellyfish.Audio
         
         public SampleEvent OnSample = new SampleEvent();
         public BeatEvent OnBeat = new BeatEvent();
+        public UnityEvent OnComplete = new UnityEvent();
 
         [SerializeField]bool showDebug = true;
         const float debugLineWidth = 0.2f;
@@ -95,6 +96,8 @@ namespace HandyJellyfish.Audio
                 
                 yield return new WaitForSeconds(SampleRatio);
             }
+
+            OnComplete.Invoke();
         }
 
         private void SimpleBeatDetection()
